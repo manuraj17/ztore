@@ -1,6 +1,6 @@
 # Ztore
 
-A simple in-memory store in zig. The idea of this project is to explore zig. Ztore helps you store simple text in a file and retrieve them.
+A simple file store in zig. The idea of this project is to explore zig. Ztore helps you store simple text in a file and retrieve them.
 
 # Usage
 
@@ -8,7 +8,7 @@ A simple in-memory store in zig. The idea of this project is to explore zig. Zto
 
 ## Commands
 
-`init`: Initialise store  
+`create`: Initialise store  
 `add`: Add content  
-`remove`: Remove contents  
+`remove`: Remove contents (Pending)
 `list`: List contents
