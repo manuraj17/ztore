@@ -1,24 +1,106 @@
+const clap = @import("clap");
 const std = @import("std");
+const file = std.fs.File;
+
+const debug = std.debug;
+const io = std.io;
+const process = std.process;
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+    // First we specify what parameters our program can take.
+    // We can use `parseParamsComptime` to parse a string into an array of `Param(Help)`
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help             Display this help and exit.
+        \\-c, --create
+        \\-a, --add <STR>     An option parameter, which takes a value.
+        \\-r, --remove <STR>  An option parameter which takes an enum.
+        \\-l, --list 
+        \\
+    );
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    // Declare our own parsers which are used to map the argument strings to other
+    // types.
+    // const YesNo = enum { yes, no };
+    const parsers = comptime .{
+        .STR = clap.parsers.string,
+        .FILE = clap.parsers.string,
+        // .INT = clap.parsers.int(usize, 10),
+        // .ANSWER = clap.parsers.enumeration(YesNo),
+    };
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, parsers, .{
+        .diagnostic = &diag,
+    }) catch |err| {
+        diag.report(io.getStdErr().writer(), err) catch {};
+        return err;
+    };
+    defer res.deinit();
 
-    try bw.flush(); // don't forget to flush!
+    if (res.args.help)
+        debug.print("--help\n", .{});
+
+    if (res.args.create)
+        try createFile();
+
+    // createFile() catch |err| {
+    //     debug.print("Error: {s}\n", .{err});
+    //     return err;
+    // };
+
+    if (res.args.add) |s|
+        try addEntry(s);
+
+    //
+    // if (res.args.remove) |s|
+    //     debug.print("--remove = {s}\n", .{s});
+    //
+    if (res.args.list)
+        try listEntries();
+
+    // for (res.args.remove) |s|
+    //     debug.print("--string = {s}\n", .{s});
+    //
+    // for (res.args.list)
+    //     debug.print("--list = {}\n", .{});
+    //
+    // for (res.positionals) |pos|
+    //     debug.print("{s}\n", .{pos});
 }
 
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
+// function to create a file ztore.db if it does not exist
+fn createFile() !void {
+    const db = try std.fs.cwd().createFile(
+        "ztore.db",
+        .{ .read = true },
+    );
+    defer db.close();
+}
+
+// function to add a new entry to the database
+// https://github.com/ziglang/zig/issues/14375#issuecomment-1397306429
+fn addEntry(item: []const u8) !void {
+    const db = try std.fs.cwd().openFile("ztore.db", .{
+        .mode = .read_write,
+    });
+    var stat = try db.stat();
+    try db.seekTo(stat.size);
+
+    defer db.close();
+
+    try db.writer().writeAll("\n");
+    try db.writer().writeAll(item);
+}
+
+// function to list the elements in the database
+fn listEntries() !void {
+    const db = try std.fs.cwd().openFile("ztore.db", .{});
+    defer db.close();
+
+    const reader = db.reader();
+    var buf: [1024]u8 = undefined;
+
+    while (try reader.readUntilDelimiterOrEof(&buf, '\n')) |line| {
+        std.debug.print("{s}\n ", .{line});
+    }
 }
